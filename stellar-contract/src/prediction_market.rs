@@ -409,6 +409,75 @@ impl PredictionMarketContract {
         todo!("Implement is_operator check")
     }
 
+    /// Set or revoke the Operator role for an address.
+    /// Only the admin can call this function.
+    ///
+    /// # Arguments
+    /// - `env` — contract environment
+    /// - `address` — the address to grant or revoke operator privileges to
+    /// - `active` — if `true`, grant the operator role; if `false`, revoke it
+    ///
+    /// # Errors
+    /// - `NotInitialized` if contract not bootstrapped
+    /// - `Unauthorized` if caller is not the admin
+    ///
+    /// # Events
+    /// - Emits `events::operator_set(address, active)`
+    pub fn set_operator(
+        env: Env,
+        address: Address,
+        active: bool,
+    ) -> Result<(), PredictionMarketError> {
+        let config = load_config(&env)?;
+
+        // Require auth from current admin
+        config.admin.require_auth();
+
+        if active {
+            // Grant operator role
+            env.storage()
+                .persistent()
+                .set(&DataKey::IsOperator(address.clone()), &true);
+        } else {
+            // Revoke operator role
+            env.storage()
+                .persistent()
+                .remove(&DataKey::IsOperator(address.clone()));
+        }
+
+        // Emit event
+        events::operator_set(&env, address, active);
+
+        Ok(())
+    }
+
+    /// Return the current state of the global emergency pause.
+    ///
+    /// # Returns
+    /// - `true` if emergency pause is active.
+    /// - `false` if the key is not set (default).
+    pub fn is_paused(env: Env) -> bool {
+        env.storage()
+            .persistent()
+            .get(&DataKey::EmergencyPause)
+            .unwrap_or(false)
+    }
+
+    /// Return the current market ID counter.
+    /// Indicates how many markets have been created.
+    ///
+    /// # Returns
+    /// - `u64` — the next market ID to be assigned.
+    ///
+    /// # Errors
+    /// - `NotInitialized` if the contract has not been bootstrapped.
+    pub fn get_next_market_id(env: Env) -> Result<u64, PredictionMarketError> {
+        env.storage()
+            .persistent()
+            .get(&DataKey::NextMarketId)
+            .ok_or(PredictionMarketError::NotInitialized)
+    }
+
     // =========================================================================
     // SECTION 4 — MARKET CREATION & CONFIGURATION
     // =========================================================================
